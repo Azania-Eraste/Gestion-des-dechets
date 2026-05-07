@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartBin Monitor</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+        :root {
+            --bg-top: #e7f4ef;
+            --bg-bottom: #c9e6db;
+            --ink: #17252a;
+            --soft-ink: #38535a;
+            --card: rgba(255, 255, 255, 0.74);
+            --accent: #0f8b8d;
+            --ok: #1f9d55;
+            --warn: #d97706;
+            --danger: #d92d20;
+            --border: rgba(23, 37, 42, 0.12);
+            --shadow: 0 14px 40px rgba(15, 36, 40, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 10% 20%, rgba(44, 182, 125, 0.24), transparent 35%),
+                radial-gradient(circle at 82% 8%, rgba(11, 142, 159, 0.28), transparent 30%),
+                linear-gradient(155deg, var(--bg-top), var(--bg-bottom));
+            display: grid;
+            place-items: center;
+            padding: 22px;
+        }
+
+        .layout {
+            width: min(880px, 100%);
+            display: grid;
+            gap: 18px;
+            animation: rise 500ms ease-out;
+        }
+
+        .panel {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            padding: 26px;
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .title {
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+            font-size: clamp(1.65rem, 3vw, 2.15rem);
+            line-height: 1.1;
+            letter-spacing: 0.02em;
+        }
+
+        .subtitle {
+            margin: 8px 0 0;
+            color: var(--soft-ink);
+            font-size: 0.95rem;
+        }
+
+        .live {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--soft-ink);
+            font-size: 0.88rem;
+            white-space: nowrap;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--ok);
+            box-shadow: 0 0 0 0 rgba(31, 157, 85, 0.55);
+            animation: pulse 1.8s infinite;
+        }
+
+        .stats {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 18px;
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .label {
+            color: var(--soft-ink);
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .distance {
+            margin-top: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: clamp(2rem, 5vw, 3.4rem);
+            line-height: 1;
+            transition: transform 240ms ease;
+        }
+
+        .message {
+            margin-top: 10px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: clamp(1.2rem, 2.4vw, 1.55rem);
+            text-transform: capitalize;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 12px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .fill-wrap {
+            margin-top: 20px;
+        }
+
+        .fill-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.86rem;
+            color: var(--soft-ink);
+            margin-bottom: 8px;
+        }
+
+        .fill-track {
+            width: 100%;
+            height: 14px;
+            border-radius: 999px;
+            background: rgba(23, 37, 42, 0.12);
+            overflow: hidden;
+        }
+
+        .fill-bar {
+            width: 0;
+            height: 100%;
+            border-radius: inherit;
+            transition: width 320ms ease;
+            background: linear-gradient(90deg, #2cb67d 0%, #0f8b8d 100%);
+        }
+
+        .meta {
+            margin-top: 14px;
+            font-size: 0.84rem;
+            color: var(--soft-ink);
+        }
+
+        .status-ok {
+            color: var(--ok);
+            background: rgba(31, 157, 85, 0.12);
+            border-color: rgba(31, 157, 85, 0.24);
+        }
+
+        .status-warn {
+            color: var(--warn);
+            background: rgba(217, 119, 6, 0.13);
+            border-color: rgba(217, 119, 6, 0.24);
+        }
+
+        .status-danger {
+            color: var(--danger);
+            background: rgba(217, 45, 32, 0.12);
+            border-color: rgba(217, 45, 32, 0.24);
+        }
+
+        .distance.bump {
+            transform: scale(1.04);
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(31, 157, 85, 0.52);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(31, 157, 85, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(31, 157, 85, 0);
+            }
+        }
+
+        @keyframes rise {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 720px) {
+            .panel {
+                padding: 20px;
+                border-radius: 20px;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="layout">
+        <section class="panel">
+            <div class="top">
+                <div>
+                    <h1 class="title">Niveau Intelligent des Déchets</h1>
+                    <p class="subtitle">ESP32 + HC-SR04 • Supervision en temps réel</p>
+                </div>
+                <div class="live">
+                    <span class="dot" id="live_dot"></span>
+                    <span id="connection_label">Connecté (SSE)</span>
+                </div>
+            </div>
+
+            <div class="stats">
+                <article class="card">
+                    <div class="label">Distance Mesurée</div>
+                    <div class="distance" id="distance_display">-- cm</div>
+                    <div class="meta" id="last_update">Dernière mise à jour: --</div>
+                </article>
+
+                <article class="card">
+                    <div class="label">Statut Du Bac</div>
+                    <div class="message" id="message_display">En attente des données...</div>
+                    <div class="status-pill status-ok" id="status_badge">Normal</div>
+                </article>
+            </div>
+
+            <div class="fill-wrap">
+                <div class="fill-label">
+                    <span>Taux de remplissage estimé</span>
+                    <strong id="fill_percent">0%</strong>
+                </div>
+                <div class="fill-track">
+                    <div class="fill-bar" id="fill_bar"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let pollingId = null;
+        const distanceEl = document.getElementById('distance_display');
+        const msgElement = document.getElementById('message_display');
+        const statusBadge = document.getElementById('status_badge');
+        const fillBar = document.getElementById('fill_bar');
+        const fillPercent = document.getElementById('fill_percent');
+        const lastUpdate = document.getElementById('last_update');
+        const connectionLabel = document.getElementById('connection_label');
+        const liveDot = document.getElementById('live_dot');
+        let last = { distance: null, message: null };
+
+        function estimateFill(distance, messageLower) {
+            if (messageLower === 'deborde' || messageLower === 'débordé') return 100;
+            if (messageLower === 'assez rempli' || messageLower === 'assez_rempli') return 75;
+            if (distance === null || Number.isNaN(Number(distance))) return 0;
+
+            // Estimation simple: plus la distance est petite, plus le bac est plein.
+            const d = Number(distance);
+            const fullAt = 5;
+            const emptyAt = 40;
+            const ratio = ((emptyAt - d) / (emptyAt - fullAt)) * 100;
+            return Math.max(0, Math.min(100, Math.round(ratio)));
+        }
+
+        function applyStatusStyle(messageLower) {
+            statusBadge.classList.remove('status-ok', 'status-warn', 'status-danger');
+
+            if (messageLower === 'deborde' || messageLower === 'débordé') {
+                statusBadge.classList.add('status-danger');
+                statusBadge.textContent = 'Critique';
+                msgElement.style.color = '#d92d20';
+            } else if (messageLower === 'assez rempli' || messageLower === 'assez_rempli') {
+                statusBadge.classList.add('status-warn');
+                statusBadge.textContent = 'Attention';
+                msgElement.style.color = '#d97706';
+            } else {
+                statusBadge.classList.add('status-ok');
+                statusBadge.textContent = 'Normal';
+                msgElement.style.color = '#1f9d55';
+            }
+        }
+
+        function render(data) {
+            const distance = (data && typeof data.distance !== 'undefined') ? data.distance : null;
+            const messageRaw = (data && typeof data.message === 'string') ? data.message : '';
+            const message = messageRaw.trim();
+            const messageLower = message.toLowerCase();
+
+            const now = new Date();
+            lastUpdate.textContent = 'Dernière mise à jour: ' + now.toLocaleTimeString('fr-FR');
+
+            if (distance !== last.distance) {
+                distanceEl.innerText = (distance === null) ? '-- cm' : (distance + ' cm');
+                distanceEl.classList.add('bump');
+                setTimeout(() => distanceEl.classList.remove('bump'), 220);
+                last.distance = distance;
+            }
+
+            if (messageRaw !== last.message) {
+                msgElement.innerText = message || 'En attente des données...';
+                applyStatusStyle(messageLower);
+                last.message = messageRaw;
+            }
+
+            const fill = estimateFill(distance, messageLower);
+            fillBar.style.width = fill + '%';
+            fillPercent.textContent = fill + '%';
+
+            if (fill >= 90) {
+                fillBar.style.background = 'linear-gradient(90deg, #f04438 0%, #d92d20 100%)';
+            } else if (fill >= 70) {
+                fillBar.style.background = 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)';
+            } else {
+                fillBar.style.background = 'linear-gradient(90deg, #2cb67d 0%, #0f8b8d 100%)';
+            }
+        }
+
+        function startPolling(interval=3000) {
+            if (pollingId) return;
+            connectionLabel.textContent = 'Mode secours (Polling)';
+            liveDot.style.background = '#d97706';
+            fetch('/data').then(r => r.json()).then(render).catch(()=>{});
+            pollingId = setInterval(()=>{
+                fetch('/data')
+                    .then(r => r.json())
+                    .then(render)
+                    .catch(()=>{});
+            }, interval);
+        }
+
+        function stopPolling() {
+            if (pollingId) {
+                clearInterval(pollingId);
+                pollingId = null;
+            }
+        }
+
+        if (!!window.EventSource) {
+            const es = new EventSource('/stream');
+            es.onmessage = function(e) {
+                try {
+                    connectionLabel.textContent = 'Connecté (SSE)';
+                    liveDot.style.background = '#1f9d55';
+                    const data = JSON.parse(e.data);
+                    render(data);
+                } catch (err) {
+                    console.error('Invalid SSE data', err);
+                }
+            };
+            es.onerror = function(e) {
+                console.error('EventSource failed, falling back to polling', e);
+                es.close();
+                startPolling();
+            };
+        } else {
+            // fallback: polling moins fréquent
+            startPolling(3000);
+        }
+    </script>
+</body>
+</html>
