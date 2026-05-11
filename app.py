@@ -203,6 +203,12 @@ def logout():
 def index():
     return render_template('index.html')
 
+
+@app.route('/appareillage')
+@login_required
+def appareillage():
+    return render_template('appareillage.html')
+
 @app.route('/data', methods=['GET'])
 def get_data():
     with donnees_lock:

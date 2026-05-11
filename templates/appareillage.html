@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appareillage • SmartBin</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+        :root{--bg-top:#e7f4ef;--bg-bottom:#c9e6db;--ink:#17252a;--soft-ink:#38535a;--card:rgba(255,255,255,0.74);--accent:#0f8b8d;--border:rgba(23,37,42,0.12);--shadow:0 14px 40px rgba(15,36,40,0.14);}*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:'Space Grotesk',sans-serif;color:var(--ink);background:radial-gradient(circle at 10% 20%, rgba(44,182,125,0.24), transparent 35%),radial-gradient(circle at 82% 8%, rgba(11,142,159,0.28), transparent 30%),linear-gradient(155deg,var(--bg-top),var(--bg-bottom));display:grid;place-items:center;padding:22px}
+        .layout{width:min(880px,100%);display:grid;gap:18px;}
+        .panel{border:1px solid var(--border);border-radius:24px;background:var(--card);box-shadow:var(--shadow);backdrop-filter:blur(10px);padding:26px}
+        .top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+        .logout-btn{padding:8px 16px;border:none;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;background:rgba(217,45,32,0.12);color:#d92d20;border:1px solid rgba(217,45,32,0.24);transition:all 200ms ease;text-decoration:none;display:inline-block}
+        .title{margin:0;font-family:'Outfit',sans-serif;font-size:clamp(1.65rem,3vw,2.15rem);line-height:1.1}
+        .label{color:var(--soft-ink);font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em}
+        .card{border:1px solid var(--border);border-radius:18px;padding:18px;background:rgba(255,255,255,0.7)}
+        input{padding:8px 10px;border-radius:8px;border:1px solid var(--border)}
+    </style>
+</head>
+<body>
+    <main class="layout">
+        <section class="panel">
+            <div class="top">
+                <div>
+                    <h1 class="title">Gestion Appareillage</h1>
+                    <p style="margin:8px 0 0;color:var(--soft-ink)">Validez les appareils ESP32 détectés et publiez leur configuration.</p>
+                </div>
+                <div style="display:flex;gap:12px;align-items:flex-start;">
+                    <a href="/" class="logout-btn">⬅️ Retour</a>
+                    <a href="/logout" class="logout-btn">👋 Déconnexion</a>
+                </div>
+            </div>
+
+            <div style="margin-top:18px">
+                <article class="card">
+                    <div class="label">En attente</div>
+                    <ul id="pending_list" style="padding-left:16px;margin:8px 0 12px 0;color:var(--ink);"></ul>
+
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <input id="mac_input" placeholder="MAC" style="flex:1" />
+                        <input id="id_input" placeholder="ID (ex: poubelle_01)" style="flex:2" />
+                        <input id="lat_input" placeholder="lat" style="width:110px" />
+                        <input id="lng_input" placeholder="lng" style="width:110px" />
+                        <button id="validate_btn" class="logout-btn" style="background:var(--accent);color:#fff;border:none">Valider</button>
+                    </div>
+
+                    <div id="pending_message" style="margin-top:8px;color:var(--soft-ink)"></div>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // JS similaire à l'index : interroge l'API et gère la validation
+        const pendingListEl = document.getElementById('pending_list');
+        const pendingMsgEl = document.getElementById('pending_message');
+        const macInput = document.getElementById('mac_input');
+        const idInput = document.getElementById('id_input');
+        const latInput = document.getElementById('lat_input');
+        const lngInput = document.getElementById('lng_input');
+        const validateBtn = document.getElementById('validate_btn');
+
+        async function fetchPending(){
+            try{
+                const res = await fetch('/api/appareillage/en-attente');
+                if(!res.ok) throw new Error('no');
+                const list = await res.json(); renderPending(list||[]);
+            }catch(e){ pendingListEl.innerHTML='<li style="color:var(--soft-ink)">Impossible de récupérer la liste</li>' }
+        }
+        function renderPending(list){ pendingListEl.innerHTML=''; if(!list||list.length===0){ pendingListEl.innerHTML='<li style="color:var(--soft-ink)">Aucun appareil en attente</li>'; return } list.forEach(mac=>{ const li=document.createElement('li'); const btn=document.createElement('button'); btn.textContent=mac; btn.style.border='1px solid var(--border)'; btn.style.padding='6px 10px'; btn.style.borderRadius='8px'; btn.style.background='transparent'; btn.onclick=()=>selectMac(mac); li.appendChild(btn); pendingListEl.appendChild(li); }) }
+        function selectMac(mac){ macInput.value=mac; idInput.focus(); }
+        validateBtn.addEventListener('click', async()=>{ const mac=macInput.value&&macInput.value.trim(); const id=idInput.value&&idInput.value.trim(); const lat=latInput.value&&latInput.value.trim(); const lng=lngInput.value&&lngInput.value.trim(); if(!mac||!id){ pendingMsgEl.textContent='MAC et ID requis pour valider.'; return } pendingMsgEl.textContent='Validation en cours...'; try{ const res=await fetch('/api/appareillage/valider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,id,lat:lat?Number(lat):null,lng:lng?Number(lng):null})}); const j=await res.json(); if(res.ok&&j.success){ pendingMsgEl.textContent='Appareil validé: '+mac; macInput.value=''; idInput.value=''; latInput.value=''; lngInput.value=''; fetchPending(); } else { pendingMsgEl.textContent='Erreur: '+(j.error||'échec de validation'); } }catch(err){ pendingMsgEl.textContent='Erreur réseau lors de la validation'; } });
+        fetchPending(); setInterval(fetchPending,5000);
+    </script>
+</body>
+</html>

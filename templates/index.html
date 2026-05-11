@@ -269,6 +269,7 @@
                         <span class="dot" id="live_dot"></span>
                         <span id="connection_label">Connecté (SSE)</span>
                     </div>
+                    <a href="/appareillage" class="logout-btn" style="background:var(--accent);color:#fff;border:none">🔌 Appareillage</a>
                     <a href="/logout" class="logout-btn">👋 Déconnexion</a>
                 </div>
             </div>
@@ -297,26 +298,7 @@
                 </div>
             </div>
 
-            <section style="margin-top:20px; display:grid; gap:12px;">
-                <article class="card">
-                    <div class="label">Appareillage</div>
-                    <p style="margin:8px 0 12px; color:var(--soft-ink);">Appareils détectés et en attente de validation.</p>
-
-                    <div id="pending_area">
-                        <ul id="pending_list" style="padding-left:16px; margin:0 0 12px 0; color:var(--ink);"></ul>
-
-                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <input id="mac_input" placeholder="MAC" style="flex:1; padding:8px 10px; border-radius:8px; border:1px solid var(--border);" />
-                            <input id="id_input" placeholder="ID (ex: poubelle_01)" style="flex:2; padding:8px 10px; border-radius:8px; border:1px solid var(--border);" />
-                            <input id="lat_input" placeholder="lat" style="width:110px; padding:8px 10px; border-radius:8px; border:1px solid var(--border);" />
-                            <input id="lng_input" placeholder="lng" style="width:110px; padding:8px 10px; border-radius:8px; border:1px solid var(--border);" />
-                            <button id="validate_btn" class="logout-btn" style="background:var(--accent); color:#fff; border:none;">Valider</button>
-                        </div>
-
-                        <div id="pending_message" style="margin-top:8px; color:var(--soft-ink);"></div>
-                    </div>
-                </article>
-            </section>
+            <!-- Bouton Appareillage déplacé vers page dédiée -->
         </section>
     </main>
 
@@ -440,88 +422,6 @@
             startPolling(3000);
         }
 
-        // --- Appareillage UI ---
-        const pendingListEl = document.getElementById('pending_list');
-        const pendingMsgEl = document.getElementById('pending_message');
-        const macInput = document.getElementById('mac_input');
-        const idInput = document.getElementById('id_input');
-        const latInput = document.getElementById('lat_input');
-        const lngInput = document.getElementById('lng_input');
-        const validateBtn = document.getElementById('validate_btn');
-
-        async function fetchPending() {
-            try {
-                const res = await fetch('/api/appareillage/en-attente');
-                if (!res.ok) throw new Error('no');
-                const list = await res.json();
-                renderPending(list || []);
-            } catch (err) {
-                // ignore si non connecté ou non autorisé
-                //console.debug('pending fetch', err);
-            }
-        }
-
-        function renderPending(list) {
-            pendingListEl.innerHTML = '';
-            if (!list || list.length === 0) {
-                pendingListEl.innerHTML = '<li style="color:var(--soft-ink);">Aucun appareil en attente</li>';
-                return;
-            }
-            list.forEach(mac => {
-                const li = document.createElement('li');
-                const btn = document.createElement('button');
-                btn.textContent = mac;
-                btn.style.border = '1px solid var(--border)';
-                btn.style.padding = '6px 10px';
-                btn.style.borderRadius = '8px';
-                btn.style.background = 'transparent';
-                btn.style.cursor = 'pointer';
-                btn.onclick = () => selectMac(mac);
-                li.appendChild(btn);
-                pendingListEl.appendChild(li);
-            });
-        }
-
-        function selectMac(mac) {
-            macInput.value = mac;
-            idInput.focus();
-        }
-
-        validateBtn.addEventListener('click', async () => {
-            const mac = macInput.value && macInput.value.trim();
-            const id = idInput.value && idInput.value.trim();
-            const lat = latInput.value && latInput.value.trim();
-            const lng = lngInput.value && lngInput.value.trim();
-            if (!mac || !id) {
-                pendingMsgEl.textContent = 'MAC et ID requis pour valider.';
-                return;
-            }
-            pendingMsgEl.textContent = 'Validation en cours...';
-            try {
-                const res = await fetch('/api/appareillage/valider', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({mac, id, lat: lat ? Number(lat) : null, lng: lng ? Number(lng) : null})
-                });
-                const j = await res.json();
-                if (res.ok && j.success) {
-                    pendingMsgEl.textContent = 'Appareil validé: ' + mac;
-                    macInput.value = '';
-                    idInput.value = '';
-                    latInput.value = '';
-                    lngInput.value = '';
-                    fetchPending();
-                } else {
-                    pendingMsgEl.textContent = 'Erreur: ' + (j.error || 'échec de validation');
-                }
-            } catch (err) {
-                pendingMsgEl.textContent = 'Erreur réseau lors de la validation';
-            }
-        });
-
-        // Rafraîchir la liste des en-attente régulièrement
-        fetchPending();
-        setInterval(fetchPending, 5000);
     </script>
 </body>
 </html>
