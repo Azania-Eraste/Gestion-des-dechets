@@ -298,6 +298,42 @@
                 </div>
             </div>
 
+            <!-- SECTION STATISTIQUES GLOBALES -->
+            <div style="margin-top:26px; display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px;">
+                <article class="card">
+                    <div class="label">Total conteneurs</div>
+                    <div style="margin-top:8px; font-family:'Outfit', sans-serif; font-weight:800; font-size:2rem;" id="stat_total">0</div>
+                </article>
+                <article class="card">
+                    <div class="label">Taux moyen</div>
+                    <div style="margin-top:8px; font-family:'Outfit', sans-serif; font-weight:800; font-size:2rem; color:var(--ok);" id="stat_avg">0%</div>
+                </article>
+                <article class="card">
+                    <div class="label">⚠️ Attention</div>
+                    <div style="margin-top:8px; font-family:'Outfit', sans-serif; font-weight:800; font-size:2rem; color:var(--warn);" id="stat_warn">0</div>
+                </article>
+                <article class="card">
+                    <div class="label">🚨 Critique</div>
+                    <div style="margin-top:8px; font-family:'Outfit', sans-serif; font-weight:800; font-size:2rem; color:var(--danger);" id="stat_crit">0</div>
+                </article>
+            </div>
+
+            <!-- SECTION GRILLE CONTENEURS -->
+            <div style="margin-top:26px;">
+                <div class="label" style="margin-bottom:12px;">Statut du parc en temps réel</div>
+                <div id="bins_grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px;">
+                    <div class="card" style="padding:14px; text-align:center; color:var(--soft-ink);">En attente...</div>
+                </div>
+            </div>
+
+            <!-- SECTION HISTORIQUE -->
+            <div style="margin-top:26px;">
+                <div class="label" style="margin-bottom:12px;">Historique des 20 derniers changements</div>
+                <div id="history_list" style="max-height:300px; overflow-y:auto; display:grid; gap:6px;">
+                    <div class="card" style="padding:12px; font-size:0.88rem; color:var(--soft-ink);">Aucun historique</div>
+                </div>
+            </div>
+
             <!-- Bouton Appareillage déplacé vers page dédiée -->
         </section>
     </main>
@@ -407,6 +443,10 @@
                     connectionLabel.textContent = 'Connecté (SSE)';
                     liveDot.style.background = '#1f9d55';
                     const data = JSON.parse(e.data);
+                    // Si c'est un dict de conteneurs, mettre à jour l'affichage complet
+                    if (data && Object.keys(data).length > 0 && data[Object.keys(data)[0]].distance !== undefined) {
+                        updateBinsDisplay(data);
+                    }
                     render(data);
                 } catch (err) {
                     console.error('Invalid SSE data', err);
@@ -421,6 +461,100 @@
             // fallback: polling moins fréquent
             startPolling(3000);
         }
+
+        // --- AFFICHAGE MULTI-CONTENEURS, STATS ET HISTORIQUE ---
+        const binsGrid = document.getElementById('bins_grid');
+        const historyList = document.getElementById('history_list');
+        const statTotal = document.getElementById('stat_total');
+        const statAvg = document.getElementById('stat_avg');
+        const statWarn = document.getElementById('stat_warn');
+        const statCrit = document.getElementById('stat_crit');
+
+        function estimateFillNum(distance) {
+            if (distance === null || distance === '' || Number.isNaN(Number(distance))) return 0;
+            const d = Number(distance);
+            const fullAt = 5;
+            const emptyAt = 40;
+            const ratio = ((emptyAt - d) / (emptyAt - fullAt)) * 100;
+            return Math.max(0, Math.min(100, Math.round(ratio)));
+        }
+
+        function getStatusColor(message, fill) {
+            const msg = (message || '').toLowerCase();
+            if (msg === 'deborde' || msg === 'débordé') return { bg: 'rgba(217, 45, 32, 0.14)', border: 'rgba(217, 45, 32, 0.3)', text: '#d92d20', label: '🚨 Critique' };
+            if (msg === 'assez rempli' || msg === 'assez_rempli' || fill >= 70) return { bg: 'rgba(217, 119, 6, 0.13)', border: 'rgba(217, 119, 6, 0.3)', text: '#d97706', label: '⚠️ Attention' };
+            return { bg: 'rgba(31, 157, 85, 0.12)', border: 'rgba(31, 157, 85, 0.3)', text: '#1f9d55', label: '✅ OK' };
+        }
+
+        async function updateBinsDisplay(data) {
+            if (!data || Object.keys(data).length === 0) {
+                binsGrid.innerHTML = '<div class="card" style="padding:14px; text-align:center; color:var(--soft-ink); grid-column:1/-1;">Aucun conteneur configuré</div>';
+                return;
+            }
+
+            binsGrid.innerHTML = '';
+            Object.entries(data).forEach(([binId, info]) => {
+                const fill = estimateFillNum(info.distance);
+                const { bg, border, text, label } = getStatusColor(info.message, fill);
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.style.cssText = `padding:14px; text-align:center; border:1px solid ${border}; background:${bg};`;
+                card.innerHTML = `
+                    <div style="font-size:0.75rem; color:var(--soft-ink); text-transform:uppercase;">${binId}</div>
+                    <div style="margin-top:8px; font-size:1.4rem; font-weight:800; color:${text};">${fill}%</div>
+                    <div style="margin-top:6px; font-size:0.78rem; color:${text}; font-weight:700;">${label}</div>
+                `;
+                binsGrid.appendChild(card);
+            });
+        }
+
+        async function updateStats() {
+            try {
+                const res = await fetch('/api/stats');
+                if (!res.ok) return;
+                const stats = await res.json();
+                statTotal.textContent = stats.total_bins;
+                statAvg.textContent = stats.avg_fill + '%';
+                statWarn.textContent = stats.warning_count;
+                statCrit.textContent = stats.critical_count;
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        async function updateHistory() {
+            try {
+                const res = await fetch('/api/historique');
+                if (!res.ok) return;
+                const events = await res.json();
+                if (!events || events.length === 0) {
+                    historyList.innerHTML = '<div class="card" style="padding:12px; font-size:0.88rem; color:var(--soft-ink); grid-column:1/-1;">Aucun historique</div>';
+                    return;
+                }
+                historyList.innerHTML = '';
+                events.slice(0, 20).forEach(evt => {
+                    const item = document.createElement('div');
+                    item.className = 'card';
+                    item.style.padding = '12px';
+                    item.style.fontSize = '0.85rem';
+                    item.innerHTML = `<strong>${evt.bin_id}</strong> • ${evt.distance}cm • <em>${evt.message}</em> <span style="color:var(--soft-ink);">@${evt.timestamp}</span>`;
+                    historyList.appendChild(item);
+                });
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        // Rafraîchir stats et historique toutes les 5 secondes
+        updateStats();
+        updateHistory();
+        setInterval(() => { updateStats(); updateHistory(); }, 5000);
+
+        // Afficher les conteneurs lors du premier render
+        fetch('/data').then(r => r.json()).then(data => {
+            updateBinsDisplay(data);
+        });
 
     </script>
 </body>

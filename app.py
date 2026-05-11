@@ -78,8 +78,28 @@ except Exception:
 # L'état global stocke maintenant TOUTES les poubelles sous forme de dictionnaire de dictionnaires
 donnees_actuelles = {} 
 donnees_lock = threading.Lock()
+
+# Historique des événements (max 500 entrées) pour traçabilité et stats
+historique = []
+historique_lock = threading.Lock()
+MAX_HISTORIQUE = 500
+
 clients = []
 clients_lock = threading.Lock()
+
+def add_to_history(bin_id, distance, message):
+    """Enregistre un événement de changement dans l'historique."""
+    with historique_lock:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        historique.append({
+            'bin_id': bin_id,
+            'distance': distance,
+            'message': message,
+            'timestamp': timestamp
+        })
+        # Garder seulement les MAX_HISTORIQUE dernières entrées
+        if len(historique) > MAX_HISTORIQUE:
+            historique.pop(0)
 
 def register_client(q):
     with clients_lock:
@@ -156,6 +176,9 @@ def on_mqtt_message(client, userdata, msg):
                         "derniere_maj": time.strftime("%H:%M:%S") # Pratique pour l'interface web
                     }
                     snapshot = dict(donnees_actuelles)
+                
+                # Enregistrer dans l'historique
+                add_to_history(bin_id, payload['distance'], payload['message'].strip().lower())
                     
                 print(f"📥 [{bin_id}] -> Distance: {payload['distance']} cm | Statut: {payload['message']}", flush=True)
                 broadcast_update(snapshot)
@@ -252,6 +275,77 @@ def api_appareillage_valider():
         app.logger.exception('Erreur lors de la publication MQTT de la config validée')
 
     return jsonify({'success': True, 'mac': mac, 'config': config})
+
+
+# API pour statistiques et historique
+@app.route('/api/stats', methods=['GET'])
+@login_required
+def api_stats():
+    """Retourne les statistiques de remplissage du parc."""
+    with donnees_lock:
+        data = dict(donnees_actuelles)
+    
+    if not data:
+        return jsonify({
+            'total_bins': 0,
+            'avg_fill': 0,
+            'max_fill': 0,
+            'min_fill': 0,
+            'critical_count': 0,
+            'warning_count': 0,
+            'ok_count': 0
+        })
+    
+    def estimate_fill(distance):
+        if distance is None or distance == '':
+            return 0
+        try:
+            d = float(distance)
+            fullAt = 5
+            emptyAt = 40
+            ratio = ((emptyAt - d) / (emptyAt - fullAt)) * 100
+            return max(0, min(100, round(ratio)))
+        except:
+            return 0
+    
+    fills = []
+    critical = 0
+    warning = 0
+    ok = 0
+    
+    for bin_id, info in data.items():
+        fill = estimate_fill(info.get('distance'))
+        fills.append(fill)
+        msg = info.get('message', '').lower()
+        if msg in ['deborde', 'débordé']:
+            critical += 1
+        elif msg in ['assez rempli', 'assez_rempli']:
+            warning += 1
+        else:
+            ok += 1
+    
+    avg_fill = round(sum(fills) / len(fills)) if fills else 0
+    max_fill = max(fills) if fills else 0
+    min_fill = min(fills) if fills else 0
+    
+    return jsonify({
+        'total_bins': len(data),
+        'avg_fill': avg_fill,
+        'max_fill': max_fill,
+        'min_fill': min_fill,
+        'critical_count': critical,
+        'warning_count': warning,
+        'ok_count': ok
+    })
+
+
+@app.route('/api/historique', methods=['GET'])
+@login_required
+def api_historique():
+    """Retourne les 50 derniers événements de l'historique."""
+    with historique_lock:
+        return jsonify(list(reversed(historique[-50:])))
+
 
 @app.route('/stream')
 def stream():
