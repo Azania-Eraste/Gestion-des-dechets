@@ -80,7 +80,7 @@ donnees_actuelles = {}
 donnees_lock = threading.Lock()
 
 # Historique des événements (max 500 entrées) pour traçabilité et stats
-historique = []
+historique_events = []
 historique_lock = threading.Lock()
 MAX_HISTORIQUE = 500
 
@@ -91,15 +91,15 @@ def add_to_history(bin_id, distance, message):
     """Enregistre un événement de changement dans l'historique."""
     with historique_lock:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        historique.append({
+        historique_events.append({
             'bin_id': bin_id,
             'distance': distance,
             'message': message,
             'timestamp': timestamp
         })
         # Garder seulement les MAX_HISTORIQUE dernières entrées
-        if len(historique) > MAX_HISTORIQUE:
-            historique.pop(0)
+        if len(historique_events) > MAX_HISTORIQUE:
+            historique_events.pop(0)
 
 def register_client(q):
     with clients_lock:
@@ -234,7 +234,7 @@ def appareillage():
 
 @app.route('/historique')
 @login_required
-def historique():
+def historique_page():
     return render_template('historique.html')
 
 @app.route('/data', methods=['GET'])
@@ -354,7 +354,7 @@ def api_historique():
     except:
         limit = 50
     with historique_lock:
-        return jsonify(list(reversed(historique[-limit:])))
+        return jsonify(list(reversed(historique_events[-limit:])))
 
 
 @app.route('/stream')
