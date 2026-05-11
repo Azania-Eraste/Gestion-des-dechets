@@ -63,6 +63,26 @@
             flex-wrap: wrap;
         }
 
+        .logout-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(217, 45, 32, 0.12);
+            color: #d92d20;
+            border: 1px solid rgba(217, 45, 32, 0.24);
+            transition: all 200ms ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .logout-btn:hover {
+            background: rgba(217, 45, 32, 0.2);
+            border-color: rgba(217, 45, 32, 0.4);
+        }
+
         .title {
             margin: 0;
             font-family: 'Outfit', sans-serif;
@@ -244,9 +264,12 @@
                     <h1 class="title">Niveau Intelligent des Déchets</h1>
                     <p class="subtitle">ESP32 + HC-SR04 • Supervision en temps réel</p>
                 </div>
-                <div class="live">
-                    <span class="dot" id="live_dot"></span>
-                    <span id="connection_label">Connecté (SSE)</span>
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                    <div class="live">
+                        <span class="dot" id="live_dot"></span>
+                        <span id="connection_label">Connecté (SSE)</span>
+                    </div>
+                    <a href="/logout" class="logout-btn">👋 Déconnexion</a>
                 </div>
             </div>
 

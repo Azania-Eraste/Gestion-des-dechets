@@ -1,32 +1,89 @@
-from flask import Flask, request, jsonify, render_template, Response
+from flask import Flask, request, jsonify, render_template, Response, session, redirect, url_for
 import threading
 import math
 import queue
 import json
 import time
+import os
+from functools import wraps
+
+try:
+    import paho.mqtt.client as mqtt
+except Exception:
+    mqtt = None
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# tentative d'activer CORS si installé (optionnel)
+# --- CONFIGURATION ADMINISTRATEUR ---
+ADMIN_PASSWORD = "admin123"  # À remplacer en production
+
+def login_required(f):
+    """Décorateur pour protéger les routes : redirige vers login si non authentifié."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'authenticated' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ==========================================
+# BASE DE DONNÉES D'APPAREILLAGE (PROVISIONING)
+# ==========================================
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'poubelles_config.json')
+
+def load_db():
+    """Charge la base depuis le fichier JSON local. Retourne un dict."""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception:
+        app.logger.exception('Impossible de charger %s', CONFIG_FILE)
+    return {}
+
+def save_db(db_dict):
+    """Sauvegarde le dict de configuration dans le fichier JSON local."""
+    try:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(db_dict, f, ensure_ascii=False, indent=2)
+    except Exception:
+        app.logger.exception('Impossible d\'écrire %s', CONFIG_FILE)
+
+# Chargement initial de la base de données persistante
+BASE_DE_DONNEES_MACS = load_db()
+
+# Salle d'attente pour les MAC détectées mais non validées
+macs_en_attente = set()
+
+# --- CONFIGURATION MQTT ---
+MQTT_HOST = "127.0.0.1"
+MQTT_PORT = 1883
+MQTT_KEEPALIVE = 60
+
+# Nouveaux Topics pour gérer la flotte
+TOPIC_DEMANDE_APPAREILLAGE = "systeme/appareillage/demande"
+TOPIC_DONNEES_POUBELLES = "abidjan/poubelles/niveau"
+
+mqtt_client = None
+
 try:
     from flask_cors import CORS
     CORS(app)
 except Exception:
     pass
 
-# On utilise un dictionnaire pour stocker les deux valeurs (prototype)
-donnees_actuelles = {"distance": 0, "message": "En attente..."}
-# Verrou pour protéger les accès concurrents à l'état global
+# L'état global stocke maintenant TOUTES les poubelles sous forme de dictionnaire de dictionnaires
+donnees_actuelles = {} 
 donnees_lock = threading.Lock()
-# Liste de queues pour diffuser les mises à jour aux clients SSE
 clients = []
 clients_lock = threading.Lock()
-
 
 def register_client(q):
     with clients_lock:
         clients.append(q)
-
 
 def unregister_client(q):
     with clients_lock:
@@ -35,11 +92,9 @@ def unregister_client(q):
         except ValueError:
             pass
 
-
 def broadcast_update(data):
     text = json.dumps(data)
     with clients_lock:
-        # parcourir une copie pour éviter modification pendant itération
         for q in list(clients):
             try:
                 q.put_nowait(text)
@@ -49,118 +104,168 @@ def broadcast_update(data):
                 except Exception:
                     pass
 
+def on_mqtt_connect(client, userdata, flags, reason_code, properties):
+    if reason_code == 0:
+        app.logger.info('MQTT connecté au broker %s:%s', MQTT_HOST, MQTT_PORT)
+        # S'abonner aux deux canaux vitaux du système
+        client.subscribe(TOPIC_DEMANDE_APPAREILLAGE)
+        client.subscribe(TOPIC_DONNEES_POUBELLES)
+        print(f"✅ Serveur prêt. Écoute sur {TOPIC_DEMANDE_APPAREILLAGE} et {TOPIC_DONNEES_POUBELLES}", flush=True)
+    else:
+        app.logger.warning('MQTT connexion refusée, code: %s', reason_code)
+
+def on_mqtt_message(client, userdata, msg):
+    try:
+        topic = msg.topic
+        payload = json.loads(msg.payload.decode('utf-8'))
+        
+        # CAS 1 : Un ESP32 vierge s'allume et demande qui il est
+        if topic == TOPIC_DEMANDE_APPAREILLAGE:
+            mac = payload.get('mac')
+            if mac:
+                print(f"📡 Demande d'appareillage reçue de la MAC : {mac}", flush=True)
+                
+                # On vérifie si la MAC est enregistrée dans notre base
+                if mac in BASE_DE_DONNEES_MACS:
+                    config = BASE_DE_DONNEES_MACS[mac]
+                    topic_reponse = f"systeme/appareillage/config/{mac}"
+                    
+                    # On envoie la configuration sur le canal personnel de cet ESP32
+                    client.publish(topic_reponse, json.dumps(config))
+                    print(f"✅ Appareillage réussi : {mac} est maintenant {config['id']}", flush=True)
+                else:
+                    # MAC inconnue -> mettre en attente pour validation via l'interface web
+                    if mac not in macs_en_attente:
+                        macs_en_attente.add(mac)
+                        print(f"🆕 Nouvel appareil détecté, MAC ajoutée en attente: {mac}", flush=True)
+                    else:
+                        print(f"ℹ️ MAC {mac} déjà en attente pour appareillage", flush=True)
+
+        # CAS 2 : Une poubelle configurée envoie ses niveaux de déchets
+        elif topic == TOPIC_DONNEES_POUBELLES:
+            bin_id = payload.get('id')
+            if bin_id and 'distance' in payload and 'message' in payload:
+                
+                # Mise à jour de la poubelle spécifique dans le dictionnaire global
+                with donnees_lock:
+                    donnees_actuelles[bin_id] = {
+                        "distance": payload['distance'],
+                        "message": payload['message'].strip().lower(),
+                        "lat": payload.get('lat', 0.0),
+                        "lng": payload.get('lng', 0.0),
+                        "derniere_maj": time.strftime("%H:%M:%S") # Pratique pour l'interface web
+                    }
+                    snapshot = dict(donnees_actuelles)
+                    
+                print(f"📥 [{bin_id}] -> Distance: {payload['distance']} cm | Statut: {payload['message']}", flush=True)
+                broadcast_update(snapshot)
+                
+    except Exception as e:
+        app.logger.exception(f"Erreur MQTT : {e}")
+
+def init_mqtt_connection():
+    global mqtt_client
+    if mqtt is None:
+        return
+    mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    mqtt_client.on_connect = on_mqtt_connect
+    mqtt_client.on_message = on_mqtt_message 
+    try:
+        mqtt_client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE)
+        mqtt_client.loop_start()
+    except Exception:
+        app.logger.exception('Échec de connexion au broker MQTT')
+
+# --- ROUTES FLASK ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if password == ADMIN_PASSWORD:
+            session['authenticated'] = True
+            session.permanent = True
+            print("✅ Administrateur connecté", flush=True)
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="Mot de passe incorrect")
+    if 'authenticated' in session:
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
-
-@app.route('/update', methods=['POST'])
-def update():
-    """Endpoint utilisé par l'ESP32 pour poster JSON: {distance: number, message: string}.
-
-    Cette fonction vérifie le Content-Type, parse le JSON de façon sûre,
-    valide les types et met à jour l'état global sous verrou.
-    """
-    if not request.is_json:
-        app.logger.warning('Requête non JSON reçue sur /update')
-        return jsonify({"status": "error", "reason": "Content-Type must be application/json"}), 400
-
-    try:
-        data = request.get_json(silent=True)
-    except Exception as e:
-        app.logger.exception('Erreur lors du parsing JSON')
-        return jsonify({"status": "error", "reason": "Malformed JSON"}), 400
-
-    if not data:
-        return jsonify({"status": "error", "reason": "Empty or invalid JSON"}), 400
-
-    # Vérification des champs attendus
-    if 'distance' not in data or 'message' not in data:
-        return jsonify({"status": "error", "reason": "Missing keys: distance and message required"}), 400
-
-    # Validation minimale des types
-    distance = data['distance']
-    message = data['message']
-
-    if not isinstance(message, str):
-        return jsonify({"status": "error", "reason": "message must be a string"}), 400
-
-    # Normaliser le message
-    message = message.strip().lower()
-
-    # Accept numeric types for distance
-    if isinstance(distance, (int, float)):
-        if math.isfinite(distance) and distance >= 0 and distance <= 10000:
-            # ok
-            pass
-        else:
-            return jsonify({"status": "error", "reason": "distance out of range"}), 400
-    else:
-        # essayer de coerce depuis une chaîne contenant un nombre
-        try:
-            distance = float(distance)
-            if not (math.isfinite(distance) and distance >= 0 and distance <= 10000):
-                return jsonify({"status": "error", "reason": "distance out of range"}), 400
-        except Exception:
-            return jsonify({"status": "error", "reason": "distance must be numeric"}), 400
-
-    # Mise à jour atomique de l'état
-    with donnees_lock:
-        donnees_actuelles['distance'] = distance
-        donnees_actuelles['message'] = message
-
-    app.logger.info('Reçu -> Distance: %s cm | Statut: %s', distance, message)
-
-    # Diffuser la mise à jour aux clients SSE (non bloquant)
-    try:
-        with donnees_lock:
-            snapshot = dict(donnees_actuelles)
-        broadcast_update(snapshot)
-    except Exception:
-        app.logger.exception('Erreur lors de la diffusion SSE')
-
-    return jsonify({"status": "success"}), 200
-
-
 @app.route('/data', methods=['GET'])
 def get_data():
-    # Récupérer une copie sous verrou pour éviter des lectures partielles
     with donnees_lock:
         snapshot = dict(donnees_actuelles)
     return jsonify(snapshot)
 
 
+# API pour gestion de l'appareillage (Frontend)
+@app.route('/api/appareillage/en-attente', methods=['GET'])
+@login_required
+def api_appareillage_en_attente():
+    return jsonify(list(macs_en_attente))
+
+
+@app.route('/api/appareillage/valider', methods=['POST'])
+@login_required
+def api_appareillage_valider():
+    data = request.get_json() or {}
+    mac = data.get('mac')
+    if not mac:
+        return jsonify({'success': False, 'error': 'Paramètre mac manquant'}), 400
+    if mac not in macs_en_attente:
+        return jsonify({'success': False, 'error': 'MAC non présente en attente'}), 400
+
+    # Construire la configuration à sauvegarder
+    config = {
+        'id': data.get('id'),
+        'lat': data.get('lat'),
+        'lng': data.get('lng')
+    }
+    BASE_DE_DONNEES_MACS[mac] = config
+    save_db(BASE_DE_DONNEES_MACS)
+    macs_en_attente.discard(mac)
+
+    # Publier la configuration immédiatement sur MQTT
+    topic_reponse = f"systeme/appareillage/config/{mac}"
+    try:
+        if mqtt_client:
+            mqtt_client.publish(topic_reponse, json.dumps(config))
+    except Exception:
+        app.logger.exception('Erreur lors de la publication MQTT de la config validée')
+
+    return jsonify({'success': True, 'mac': mac, 'config': config})
+
 @app.route('/stream')
 def stream():
-    """Endpoint SSE (Server-Sent Events) pour pousser les mises à jour aux clients.
-
-    Le client ouvre une connexion EventSource sur `/stream` et reçoit des événements
-    `data: {...}\n\n` contenant le snapshot JSON.
-    """
     q = queue.Queue()
     register_client(q)
-
     def event_stream():
         try:
-            # Envoyer immédiatement l'état courant
             with donnees_lock:
                 initial = dict(donnees_actuelles)
             yield 'data: %s\n\n' % json.dumps(initial)
-
             while True:
                 try:
                     item = q.get(timeout=15)
                     yield 'data: %s\n\n' % item
                 except queue.Empty:
-                    # keep-alive comment pour maintenir la connexion
                     yield ': keep-alive\n\n'
         finally:
             unregister_client(q)
-
     return Response(event_stream(), mimetype='text/event-stream')
 
-
 if __name__ == '__main__':
-    # Ne pas activer le debugger dans ce script par défaut
+    init_mqtt_connection()
     app.run(host='0.0.0.0', port=5000, debug=False)

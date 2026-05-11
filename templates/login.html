@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - SmartBin Monitor</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+        :root {
+            --bg-top: #e7f4ef;
+            --bg-bottom: #c9e6db;
+            --ink: #17252a;
+            --soft-ink: #38535a;
+            --accent: #0f8b8d;
+            --border: rgba(23, 37, 42, 0.12);
+            --shadow: 0 14px 40px rgba(15, 36, 40, 0.14);
+            --error: #d92d20;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 10% 20%, rgba(44, 182, 125, 0.24), transparent 35%),
+                radial-gradient(circle at 82% 8%, rgba(11, 142, 159, 0.28), transparent 30%),
+                linear-gradient(155deg, var(--bg-top), var(--bg-bottom));
+            display: grid;
+            place-items: center;
+            padding: 22px;
+        }
+
+        .login-container {
+            width: min(420px, 100%);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .panel {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.74);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            animation: rise 500ms ease-out;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .title {
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+
+        .subtitle {
+            margin: 8px 0 0;
+            color: var(--soft-ink);
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .label {
+            color: var(--soft-ink);
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .input {
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            color: var(--ink);
+            background: rgba(255, 255, 255, 0.6);
+            transition: all 200ms ease;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 3px rgba(15, 139, 141, 0.12);
+        }
+
+        .button {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 200ms ease;
+            background: linear-gradient(135deg, #0f8b8d, #0a5f62);
+            color: white;
+            box-shadow: 0 4px 12px rgba(15, 139, 141, 0.3);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(15, 139, 141, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(217, 45, 32, 0.12);
+            border: 1px solid rgba(217, 45, 32, 0.24);
+            color: var(--error);
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: none;
+            animation: shake 300ms ease;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        @keyframes rise {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+
+        .info {
+            padding: 14px;
+            border-radius: 12px;
+            background: rgba(15, 139, 141, 0.08);
+            border: 1px solid rgba(15, 139, 141, 0.24);
+            color: var(--soft-ink);
+            font-size: 0.85rem;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 480px) {
+            .panel {
+                padding: 30px 24px;
+            }
+
+            .title {
+                font-size: 1.65rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="panel">
+            <div class="header">
+                <h1 class="title">🔐 SmartBin</h1>
+                <p class="subtitle">Plateforme de supervision</p>
+            </div>
+
+            <form method="POST">
+                <div class="form-group">
+                    <label class="label">Mot de passe administrateur</label>
+                    <input 
+                        type="password" 
+                        name="password" 
+                        class="input" 
+                        placeholder="Entrez le mot de passe" 
+                        required
+                        autofocus
+                    >
+                </div>
+
+                {% if error %}
+                <div class="error-message show">
+                    ⚠️ {{ error }}
+                </div>
+                {% endif %}
+
+                <button type="submit" class="button">Se connecter</button>
+            </form>
+
+            <div class="info">
+                💡 <strong>Astuce</strong>: Le mot de passe par défaut est <code>admin123</code>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
