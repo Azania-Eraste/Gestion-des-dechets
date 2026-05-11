@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historique - SmartBin</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+        :root {
+            --bg-top: #e7f4ef;
+            --bg-bottom: #c9e6db;
+            --ink: #17252a;
+            --soft-ink: #38535a;
+            --card: rgba(255, 255, 255, 0.74);
+            --accent: #0f8b8d;
+            --ok: #1f9d55;
+            --warn: #d97706;
+            --danger: #d92d20;
+            --border: rgba(23, 37, 42, 0.12);
+            --shadow: 0 14px 40px rgba(15, 36, 40, 0.14);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 10% 20%, rgba(44, 182, 125, 0.24), transparent 35%),
+                radial-gradient(circle at 82% 8%, rgba(11, 142, 159, 0.28), transparent 30%),
+                linear-gradient(155deg, var(--bg-top), var(--bg-bottom));
+            padding: 22px;
+        }
+
+        .layout {
+            width: min(1100px, 100%);
+            margin: 0 auto;
+            display: grid;
+            gap: 18px;
+            animation: rise 500ms ease-out;
+        }
+
+        .panel {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            padding: 26px;
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .title {
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+            font-size: clamp(1.65rem, 3vw, 2.15rem);
+            line-height: 1.1;
+        }
+
+        .subtitle {
+            margin: 8px 0 0;
+            color: var(--soft-ink);
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(217, 45, 32, 0.12);
+            color: #d92d20;
+            border: 1px solid rgba(217, 45, 32, 0.24);
+            transition: all 200ms ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover { background: rgba(217, 45, 32, 0.2); }
+
+        .btn.accent {
+            background: var(--accent);
+            color: white;
+            border-color: transparent;
+        }
+
+        .filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        select {
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: white;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 18px;
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .label {
+            color: var(--soft-ink);
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .history-list {
+            max-height: 600px;
+            overflow-y: auto;
+            display: grid;
+            gap: 8px;
+        }
+
+        .history-item {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.65);
+            display: grid;
+            grid-template-columns: 120px 1fr 100px;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .bin-name {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--ink);
+        }
+
+        .event-info {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .distance {
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(15, 139, 141, 0.12);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--accent);
+        }
+
+        .message-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        .msg-ok { background: rgba(31, 157, 85, 0.12); color: var(--ok); }
+        .msg-warn { background: rgba(217, 119, 6, 0.13); color: var(--warn); }
+        .msg-danger { background: rgba(217, 45, 32, 0.12); color: var(--danger); }
+
+        .timestamp {
+            color: var(--soft-ink);
+            font-size: 0.82rem;
+            text-align: right;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--soft-ink);
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .stat-card {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .stat-value {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 2rem;
+        }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 900px) {
+            .history-item {
+                grid-template-columns: 1fr;
+            }
+            .stats-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="layout">
+        <section class="panel">
+            <div class="top">
+                <div>
+                    <h1 class="title">Historique des Changements</h1>
+                    <p class="subtitle">Tous les événements de remplissage enregistrés avec filtrage temporel.</p>
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <a href="/" class="btn accent">← Retour dashboard</a>
+                    <a href="/logout" class="btn">👋 Déconnexion</a>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <div class="label">Filtres temporels</div>
+                <div class="filters">
+                    <select id="period_filter">
+                        <option value="all">Tous les temps</option>
+                        <option value="week">7 derniers jours</option>
+                        <option value="month">30 derniers jours</option>
+                        <option value="today">Aujourd'hui</option>
+                    </select>
+                    <select id="status_filter">
+                        <option value="all">Tous les statuts</option>
+                        <option value="ok">✅ OK</option>
+                        <option value="warning">⚠️ Attention</option>
+                        <option value="critical">🚨 Critique</option>
+                    </select>
+                    <button class="btn accent" id="refresh_btn" type="button">🔄 Rafraîchir</button>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="label">Événements</div>
+                    <div class="stat-value" id="stat_events">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Conteneurs</div>
+                    <div class="stat-value" id="stat_bins">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">OK</div>
+                    <div class="stat-value" style="color: var(--ok);" id="stat_ok">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Attention/Critique</div>
+                    <div class="stat-value" style="color: var(--warn);" id="stat_issues">0</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px;">
+                <div class="label" style="margin-bottom: 12px;">Journal des événements</div>
+                <div class="history-list" id="history_container">
+                    <div class="empty-state">Chargement de l'historique...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const periodFilter = document.getElementById('period_filter');
+        const statusFilter = document.getElementById('status_filter');
+        const refreshBtn = document.getElementById('refresh_btn');
+        const historyContainer = document.getElementById('history_container');
+        const statEvents = document.getElementById('stat_events');
+        const statBins = document.getElementById('stat_bins');
+        const statOk = document.getElementById('stat_ok');
+        const statIssues = document.getElementById('stat_issues');
+
+        let allHistory = [];
+
+        function getStatusType(message) {
+            const msg = (message || '').toLowerCase();
+            if (msg === 'deborde' || msg === 'débordé') return 'critical';
+            if (msg === 'assez rempli' || msg === 'assez_rempli') return 'warning';
+            return 'ok';
+        }
+
+        function getMessageBadge(message) {
+            const type = getStatusType(message);
+            const msgDisplay = message.charAt(0).toUpperCase() + message.slice(1);
+            if (type === 'critical') return `<span class="message-badge msg-danger">🚨 ${msgDisplay}</span>`;
+            if (type === 'warning') return `<span class="message-badge msg-warn">⚠️ ${msgDisplay}</span>`;
+            return `<span class="message-badge msg-ok">✅ ${msgDisplay}</span>`;
+        }
+
+        function parseDate(dateStr) {
+            // Format: "YYYY-MM-DD HH:MM:SS"
+            return new Date(dateStr + ' GMT');
+        }
+
+        function filterByPeriod(events, period) {
+            const now = new Date();
+            let cutoff;
+
+            if (period === 'today') {
+                cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            } else if (period === 'week') {
+                cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            } else if (period === 'month') {
+                cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            } else {
+                return events;
+            }
+
+            return events.filter(e => parseDate(e.timestamp) >= cutoff);
+        }
+
+        function filterByStatus(events, status) {
+            if (status === 'all') return events;
+            return events.filter(e => getStatusType(e.message) === status);
+        }
+
+        function updateStats(events) {
+            const bins = new Set(events.map(e => e.bin_id)).size;
+            const ok = events.filter(e => getStatusType(e.message) === 'ok').length;
+            const issues = events.length - ok;
+
+            statEvents.textContent = events.length;
+            statBins.textContent = bins;
+            statOk.textContent = ok;
+            statIssues.textContent = issues;
+        }
+
+        function renderHistory(events) {
+            if (!events.length) {
+                historyContainer.innerHTML = '<div class="empty-state">Aucun événement pour cette période.</div>';
+                updateStats([]);
+                return;
+            }
+
+            historyContainer.innerHTML = '';
+            events.forEach(evt => {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.innerHTML = `
+                    <div class="bin-name">${evt.bin_id}</div>
+                    <div class="event-info">
+                        <span class="distance">${evt.distance} cm</span>
+                        ${getMessageBadge(evt.message)}
+                    </div>
+                    <div class="timestamp">${evt.timestamp}</div>
+                `;
+                historyContainer.appendChild(item);
+            });
+
+            updateStats(events);
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/historique?limit=500');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                allHistory = await res.json();
+                applyFilters();
+            } catch (err) {
+                historyContainer.innerHTML = '<div class="empty-state">Erreur lors du chargement de l\'historique.</div>';
+            }
+        }
+
+        function applyFilters() {
+            const period = periodFilter.value;
+            const status = statusFilter.value;
+
+            let filtered = filterByPeriod(allHistory, period);
+            filtered = filterByStatus(filtered, status);
+            renderHistory(filtered);
+        }
+
+        periodFilter.addEventListener('change', applyFilters);
+        statusFilter.addEventListener('change', applyFilters);
+        refreshBtn.addEventListener('click', loadHistory);
+
+        loadHistory();
+        setInterval(loadHistory, 10000); // Rafraîchir toutes les 10 secondes
+    </script>
+</body>
+</html>

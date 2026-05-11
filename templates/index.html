@@ -270,31 +270,8 @@
                         <span id="connection_label">Connecté (SSE)</span>
                     </div>
                     <a href="/appareillage" class="logout-btn" style="background:var(--accent);color:#fff;border:none">🔌 Appareillage</a>
+                    <a href="/historique" class="logout-btn" style="background:var(--accent);color:#fff;border:none">📊 Historique</a>
                     <a href="/logout" class="logout-btn">👋 Déconnexion</a>
-                </div>
-            </div>
-
-            <div class="stats">
-                <article class="card">
-                    <div class="label">Distance Mesurée</div>
-                    <div class="distance" id="distance_display">-- cm</div>
-                    <div class="meta" id="last_update">Dernière mise à jour: --</div>
-                </article>
-
-                <article class="card">
-                    <div class="label">Statut Du Bac</div>
-                    <div class="message" id="message_display">En attente des données...</div>
-                    <div class="status-pill status-ok" id="status_badge">Normal</div>
-                </article>
-            </div>
-
-            <div class="fill-wrap">
-                <div class="fill-label">
-                    <span>Taux de remplissage estimé</span>
-                    <strong id="fill_percent">0%</strong>
-                </div>
-                <div class="fill-track">
-                    <div class="fill-bar" id="fill_bar"></div>
                 </div>
             </div>
 
@@ -340,81 +317,8 @@
 
     <script>
         let pollingId = null;
-        const distanceEl = document.getElementById('distance_display');
-        const msgElement = document.getElementById('message_display');
-        const statusBadge = document.getElementById('status_badge');
-        const fillBar = document.getElementById('fill_bar');
-        const fillPercent = document.getElementById('fill_percent');
-        const lastUpdate = document.getElementById('last_update');
         const connectionLabel = document.getElementById('connection_label');
         const liveDot = document.getElementById('live_dot');
-        let last = { distance: null, message: null };
-
-        function estimateFill(distance, messageLower) {
-            if (messageLower === 'deborde' || messageLower === 'débordé') return 100;
-            if (messageLower === 'assez rempli' || messageLower === 'assez_rempli') return 75;
-            if (distance === null || Number.isNaN(Number(distance))) return 0;
-
-            // Estimation simple: plus la distance est petite, plus le bac est plein.
-            const d = Number(distance);
-            const fullAt = 5;
-            const emptyAt = 40;
-            const ratio = ((emptyAt - d) / (emptyAt - fullAt)) * 100;
-            return Math.max(0, Math.min(100, Math.round(ratio)));
-        }
-
-        function applyStatusStyle(messageLower) {
-            statusBadge.classList.remove('status-ok', 'status-warn', 'status-danger');
-
-            if (messageLower === 'deborde' || messageLower === 'débordé') {
-                statusBadge.classList.add('status-danger');
-                statusBadge.textContent = 'Critique';
-                msgElement.style.color = '#d92d20';
-            } else if (messageLower === 'assez rempli' || messageLower === 'assez_rempli') {
-                statusBadge.classList.add('status-warn');
-                statusBadge.textContent = 'Attention';
-                msgElement.style.color = '#d97706';
-            } else {
-                statusBadge.classList.add('status-ok');
-                statusBadge.textContent = 'Normal';
-                msgElement.style.color = '#1f9d55';
-            }
-        }
-
-        function render(data) {
-            const distance = (data && typeof data.distance !== 'undefined') ? data.distance : null;
-            const messageRaw = (data && typeof data.message === 'string') ? data.message : '';
-            const message = messageRaw.trim();
-            const messageLower = message.toLowerCase();
-
-            const now = new Date();
-            lastUpdate.textContent = 'Dernière mise à jour: ' + now.toLocaleTimeString('fr-FR');
-
-            if (distance !== last.distance) {
-                distanceEl.innerText = (distance === null) ? '-- cm' : (distance + ' cm');
-                distanceEl.classList.add('bump');
-                setTimeout(() => distanceEl.classList.remove('bump'), 220);
-                last.distance = distance;
-            }
-
-            if (messageRaw !== last.message) {
-                msgElement.innerText = message || 'En attente des données...';
-                applyStatusStyle(messageLower);
-                last.message = messageRaw;
-            }
-
-            const fill = estimateFill(distance, messageLower);
-            fillBar.style.width = fill + '%';
-            fillPercent.textContent = fill + '%';
-
-            if (fill >= 90) {
-                fillBar.style.background = 'linear-gradient(90deg, #f04438 0%, #d92d20 100%)';
-            } else if (fill >= 70) {
-                fillBar.style.background = 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)';
-            } else {
-                fillBar.style.background = 'linear-gradient(90deg, #2cb67d 0%, #0f8b8d 100%)';
-            }
-        }
 
         function startPolling(interval=3000) {
             if (pollingId) return;
@@ -447,7 +351,6 @@
                     if (data && Object.keys(data).length > 0 && data[Object.keys(data)[0]].distance !== undefined) {
                         updateBinsDisplay(data);
                     }
-                    render(data);
                 } catch (err) {
                     console.error('Invalid SSE data', err);
                 }

@@ -232,6 +232,11 @@ def index():
 def appareillage():
     return render_template('appareillage.html')
 
+@app.route('/historique')
+@login_required
+def historique():
+    return render_template('historique.html')
+
 @app.route('/data', methods=['GET'])
 def get_data():
     with donnees_lock:
@@ -342,9 +347,14 @@ def api_stats():
 @app.route('/api/historique', methods=['GET'])
 @login_required
 def api_historique():
-    """Retourne les 50 derniers événements de l'historique."""
+    """Retourne les événements de l'historique. Paramètre limit par défaut 50."""
+    try:
+        limit = int(request.args.get('limit', 50))
+        limit = max(1, min(limit, 500))  # Limiter entre 1 et 500
+    except:
+        limit = 50
     with historique_lock:
-        return jsonify(list(reversed(historique[-50:])))
+        return jsonify(list(reversed(historique[-limit:])))
 
 
 @app.route('/stream')
